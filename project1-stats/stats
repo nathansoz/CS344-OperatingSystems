@@ -1,0 +1,87 @@
+#!/bin/bash
+
+#Constants
+
+DEBUG=1
+
+COLS_ID="-c"
+ROWS_ID="-r"
+
+#I always get this from: http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+TMP_DATA="${SCRIPT_DIR}/input_data"
+TMP_RM=($TMP_DATA)
+
+## UTILITY FUNCTIONS ##
+
+###################################################
+# Function: print_help
+#
+#   Prints a usage statement and then exits
+#      inputs:  none
+#      outputs: none
+#
+##################################################
+function print_help()
+{
+    echo "Usage: stats {-rows|-cols} [file]" 
+}
+
+function debug()
+{
+    if [ "${DEBUG}" -ne "0" ]; then
+        local dbgStr=${1} 
+        (>&2 echo "${dbgStr}")
+    fi
+}
+
+function exitWithCode()
+{
+    local exitCode=$1
+
+    for i in ${TMP_RM[@]}; do
+        if [ -f ${i} ]; then
+            debug "remove ${i}"
+            rm -f ${i}
+        fi
+    done
+
+    debug "Exit with code ${exitCode}"
+    exit ${exitCode}
+}
+
+
+function parse_arguments()
+{
+    if [[ "$#" -eq 0 ]]; then
+        print_help
+        exitWithCode 1
+    fi
+
+    if [[ ${1} == ${COLS_ID}* ]]; then
+        debug "Columns"
+    elif [[ ${1} == ${ROWS_ID}* ]]; then
+        debug "Rows"
+    else
+        debug "Unknown"
+        exitWithCode 1
+    fi
+
+    if [ "$#" -eq "1" ]; then
+        cat > "${TMP_DATA}"
+    elif [ "$#" -eq "2" ]; then
+        cp $2 ${TMP_DATA}
+    fi
+}
+
+function parse_input()
+{
+    while read -a fileLine; do
+        echo readIt
+    done < "${TMP_DATA}"
+}
+
+parse_arguments $@
+parse_input
+exitWithCode 0
