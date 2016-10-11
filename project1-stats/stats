@@ -7,6 +7,10 @@ DEBUG=1
 COLS_ID="-c"
 ROWS_ID="-r"
 
+#globals
+
+TO_PARSE="unset"
+
 #I always get this from: http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -28,6 +32,16 @@ function print_help()
     echo "Usage: stats {-rows|-cols} [file]" 
 }
 
+###################################################
+# Function: print_help
+#
+#   Prints a debugging statement if the Constants
+#   DEBUG is set to 1
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
 function debug()
 {
     if [ "${DEBUG}" -ne "0" ]; then
@@ -61,8 +75,10 @@ function parse_arguments()
 
     if [[ ${1} == ${COLS_ID}* ]]; then
         debug "Columns"
+        TO_PARSE="C"
     elif [[ ${1} == ${ROWS_ID}* ]]; then
         debug "Rows"
+        TO_PARSE="R"
     else
         debug "Unknown"
         exitWithCode 1
@@ -75,13 +91,74 @@ function parse_arguments()
     fi
 }
 
-function parse_input()
+function print_header()
 {
-    while read -a fileLine; do
-        echo readIt
-    done < "${TMP_DATA}"
+    echo "Average Median"
 }
 
+function calculate_mean()
+{
+    declare -a arr=("${!1}")
+    declare -a ret
+
+    total=0
+    for num in ${arr[@]}; do
+        total=`expr ${total} + ${num}`
+    done
+
+    average=$(( (${total} + (${#arr[@]} / 2)) / ${#arr[@]} ))
+
+    echo ${average}
+}
+
+function calculate_median
+{
+    declare -a arr=("${!1}")
+    declare -a sorted
+
+    checkOdd=$(( ${#arr[@]} % 2 ))
+    medianIndex=$(( (${#arr[@]} / 2) ))
+
+    sorted=( $(for num in ${arr[@]}; do
+        echo ${num}
+    done | sort) )
+
+    if [ $checkOdd -eq 1 ]; then
+        echo ${sorted[$medianIndex]}
+    else
+        secondIndex=$(( $medianIndex + 1 ))
+        median=$(( ( ${sorted[$medianIndex]} + ${sorted[$secondIndex]} + 1 ) / 2  ))
+        echo ${median}
+    fi
+
+}
+
+function calculate()
+{
+    declare -a means
+    declare -a medians
+
+    if [ $TO_PARSE == "R" ]; then
+        index=0
+        while read -a fileLine; do
+            means[$index]=$(calculate_mean fileLine[@])
+            medians[$index]=$(calculate_median fileLine[@])
+            index=$(($index + 1))
+        done < "${TMP_DATA}"
+    elif [ $TO_PARSE == "C" ]; then
+        echo "COLS"
+    else
+        echo "Something bad has happened."
+        exitWithCode 1
+    fi
+
+    for i in ${!means[@]}; do
+        echo "${means[$i]}       ${medians[$i]}"
+    done
+}
+
+#MAIN
 parse_arguments $@
-parse_input
+print_header
+calculate
 exitWithCode 0
