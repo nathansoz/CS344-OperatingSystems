@@ -1,5 +1,17 @@
 #!/bin/bash
 
+###################################################
+# Script: stats
+#
+#   Calculates the median and mean of a given
+#   2-d array of integers. Can calculate based on
+#   rows or cols
+#
+#      inputs:  stdin or file with 2d array
+#      outputs: the means and medians
+#
+##################################################
+
 #Constants
 
 DEBUG=0
@@ -34,7 +46,7 @@ function print_help()
 }
 
 ###################################################
-# Function: print_help
+# Function: debug
 #
 #   Prints a debugging statement if the Constant
 #   DEBUG is set to 1
@@ -139,7 +151,16 @@ function parse_arguments()
     fi
 }
 
-
+###################################################
+# Function: calculate_mean
+#
+#   Calculates the mean of a given array
+#   
+#
+#      inputs:  the array
+#      outputs: the mean
+#
+##################################################
 function calculate_mean()
 {
     declare -a arr=("${!1}")
@@ -155,6 +176,16 @@ function calculate_mean()
     echo ${average}
 }
 
+###################################################
+# Function: calculate_median
+#
+#   Calculates the median of a given array
+#   
+#
+#      inputs:  the array
+#      outputs: the median
+#
+##################################################
 function calculate_median
 {
     declare -a arr=("${!1}")
@@ -190,6 +221,16 @@ function split_to_cols()
     done < "${fileName}"
 }
 
+###################################################
+# Function: process_cols
+#
+#   Takes temporary files created by split_to_cols
+#   and prints out stats related to it
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
 function process_cols()
 {
     local means=()
@@ -206,6 +247,7 @@ function process_cols()
         index=$(($index + 1))
     done
 
+    #Prints out if we are calculating cols
     echo "Averages:"
     for i in ${!means[@]}; do
         printf "${means[$i]}    "
@@ -219,6 +261,16 @@ function process_cols()
     printf "\n"
 }
 
+###################################################
+# Function: calculate
+#
+#   Main function once argument parsing is finished
+#   
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
 function calculate()
 {
     if [ ! -s ${TMP_DATA} ]; then
@@ -237,7 +289,8 @@ function calculate()
             medians[$index]=$(calculate_median fileLine[@])
             index=$(($index + 1))
         done < "${TMP_DATA}"     
- 
+        
+        #Prints out if we are calculating rows
         for i in ${!means[@]}; do
             echo "${means[$i]}       ${medians[$i]}"
         done
@@ -255,7 +308,7 @@ function calculate()
 
 trap 'exitWithCode 1' SIGTERM SIGHUP SIGINT
 
-#MAIN
+#MAIN ENTRY POINT
 parse_arguments $@
 calculate
 exitWithCode 0
