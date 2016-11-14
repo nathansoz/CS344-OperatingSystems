@@ -1,0 +1,314 @@
+#!/bin/bash
+
+###################################################
+# Script: stats
+#
+#   Calculates the median and mean of a given
+#   2-d array of integers. Can calculate based on
+#   rows or cols
+#
+#      inputs:  stdin or file with 2d array
+#      outputs: the means and medians
+#
+##################################################
+
+#Constants
+
+DEBUG=0
+
+COLS_ID="-c"
+ROWS_ID="-r"
+
+#globals
+
+TO_PARSE="unset"
+
+#I always get this from: http://stackoverflow.com/questions/59895/can-a-bash-script-tell-which-directory-it-is-stored-in
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+TMP_DATA="${SCRIPT_DIR}/input_data_${BASHPID}"
+TMP_RM=($TMP_DATA)
+TMP_FILE_NEXT=1
+
+## UTILITY FUNCTIONS ##
+
+###################################################
+# Function: print_help
+#
+#   Prints a usage statement and then exits
+#      inputs:  none
+#      outputs: none
+#
+##################################################
+function print_help()
+{
+    (>&2 echo "Usage: stats {-rows|-cols} [file]") 
+}
+
+###################################################
+# Function: debug
+#
+#   Prints a debugging statement if the Constant
+#   DEBUG is set to 1
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
+function debug()
+{
+    if [ "${DEBUG}" -ne "0" ]; then
+        local dbgStr=${1} 
+        (>&2 echo "${dbgStr}")
+    fi
+}
+
+###################################################
+# Function: exitWithCode
+#
+#   Exits the script with a given code
+#   
+#
+#      inputs:  the code to exit with
+#      outputs: none
+#
+##################################################
+function exitWithCode()
+{
+    local exitCode=$1
+
+    for i in ${TMP_RM[@]}; do
+        if [ -f ${i} ]; then
+            debug "remove ${i}"
+            rm -f ${i}
+        fi
+    done
+
+    debug "remove ${SCRIPT_DIR}/tmp_*"
+    rm -f ${SCRIPT_DIR}/tmp_${BASHPID}_*
+
+    debug "Exit with code ${exitCode}"
+    exit ${exitCode}
+}
+
+function empty_file()
+{
+    echo "FILE IS EMPTY"
+    exitWithCode 0
+}
+
+function no_permissions()
+{
+    (>&2 echo "NO PERMISSIONS")
+    exitWithCode 1
+}
+
+###################################################
+# Function: parse_arguments
+#
+#   Parse the arguments
+#   
+#
+#      inputs:  the arguments
+#      outputs: none
+#
+##################################################
+function parse_arguments()
+{
+    if [[ "$#" -eq 0 ]]; then
+        print_help
+        exitWithCode 1
+    elif [[ "$#" -gt 2 ]]; then
+        print_help
+        exitWithCode 1
+    fi
+
+    if [[ ${1} == ${COLS_ID}* ]]; then
+        debug "Columns"
+        TO_PARSE="C"
+    elif [[ ${1} == ${ROWS_ID}* ]]; then
+        debug "Rows"
+        TO_PARSE="R"
+    else
+        debug "Unknown"
+        print_help
+        exitWithCode 1
+    fi
+
+    if [ "$#" -eq "1" ]; then
+        cat > "${TMP_DATA}"
+    elif [ "$#" -eq "2" ]; then
+        if [ ! -r $2 ]; then
+            no_permissions
+        fi
+        if [ ! -f $2 ]; then
+            print_help
+            exitWithCode 1
+        fi
+
+        cp $2 ${TMP_DATA}
+
+    fi
+}
+
+###################################################
+# Function: calculate_mean
+#
+#   Calculates the mean of a given array
+#   
+#
+#      inputs:  the array
+#      outputs: the mean
+#
+##################################################
+function calculate_mean()
+{
+    declare -a arr=("${!1}")
+    declare -a ret
+
+    total=0
+    for num in ${arr[@]}; do
+        total=`expr ${total} + ${num}`
+    done
+
+    average=$(( (${total} + (${#arr[@]} / 2)) / ${#arr[@]} ))
+
+    echo ${average}
+}
+
+###################################################
+# Function: calculate_median
+#
+#   Calculates the median of a given array
+#   
+#
+#      inputs:  the array
+#      outputs: the median
+#
+##################################################
+function calculate_median
+{
+    declare -a arr=("${!1}")
+    declare -a sorted
+
+    medianIndex=$(( (${#arr[@]} / 2) ))
+
+    sorted=( $(for num in ${arr[@]}; do
+        echo ${num}
+    done | sort -n) )
+    echo ${sorted[$medianIndex]}
+
+}
+
+###################################################
+# Function: split_to_cols
+#
+#   Splits the given file into temporary files with cols
+#   
+#
+#      inputs:  the code to exit with
+#      outputs: none
+#
+##################################################
+function split_to_cols()
+{
+    local fileName=$1
+
+    while read -a fileLine; do
+        for i in ${!fileLine[@]}; do
+            echo "${fileLine[$i]}" >> "tmp_${BASHPID}_${i}"
+        done
+    done < "${fileName}"
+}
+
+###################################################
+# Function: process_cols
+#
+#   Takes temporary files created by split_to_cols
+#   and prints out stats related to it
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
+function process_cols()
+{
+    local means=()
+    local medians=()
+
+    local index=0
+    for fi in ${SCRIPT_DIR}/tmp_${BASHPID}_*; do
+        local values=()
+        while read fileLine; do
+            values+=($fileLine)
+        done < ${fi}
+        means[$index]=$(calculate_mean values[@])
+        medians[$index]=$(calculate_median values[@])
+        index=$(($index + 1))
+    done
+
+    #Prints out if we are calculating cols
+    echo "Averages:"
+    for i in ${!means[@]}; do
+        printf "${means[$i]}    "
+    done
+    printf "\n"
+
+    echo "Medians:"
+    for i in ${!medians[@]}; do
+        printf "${medians[$i]}    "
+    done
+    printf "\n"
+}
+
+###################################################
+# Function: calculate
+#
+#   Main function once argument parsing is finished
+#   
+#
+#      inputs:  none
+#      outputs: none
+#
+##################################################
+function calculate()
+{
+    if [ ! -s ${TMP_DATA} ]; then
+        empty_file
+    fi
+
+    local means=()
+    local medians=()
+
+    if [ $TO_PARSE == "R" ]; then
+        echo "Average Median"
+
+        local index=0
+        while read -a fileLine; do
+            means[$index]=$(calculate_mean fileLine[@])
+            medians[$index]=$(calculate_median fileLine[@])
+            index=$(($index + 1))
+        done < "${TMP_DATA}"     
+        
+        #Prints out if we are calculating rows
+        for i in ${!means[@]}; do
+            echo "${means[$i]}       ${medians[$i]}"
+        done
+    elif [ $TO_PARSE == "C" ]; then
+        debug "COLS"
+        split_to_cols ${TMP_DATA}
+        process_cols
+    else
+        echo "Something bad has happened."
+        exitWithCode 1
+    fi
+
+
+}
+
+trap 'exitWithCode 1' SIGTERM SIGHUP SIGINT
+
+#MAIN ENTRY POINT
+parse_arguments $@
+calculate
+exitWithCode 0
