@@ -5,13 +5,18 @@
 #ifndef SMALLSH_COMMAND_H
 #define SMALLSH_COMMAND_H
 
+#include <stdbool.h>
+
 typedef struct
 {
     char* command;
     char** arguments;
+    size_t numArgs;
     int return_code;
     bool redirectStdIn;
+    char* stdInFile;
     bool redirectStdOut;
+    char* stdOutFile;
     bool background;
 } Command;
 

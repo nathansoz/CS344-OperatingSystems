@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <sys/types.h>
+#include <wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "command.h"
 
 const char* PROMPT = ": ";
@@ -11,11 +16,11 @@ const int PROMPT_BUFFER = 4096;
 
 int CURRENT_RETURN = 0;
 
-Command* parseArgs(const char* toParse, size_t* parsedArgs)
+Command* parseArgs(const char* toParse)
 {
 
     size_t i = 0;
-    size_t count = 1;
+    int count = 1;
     while(i < strlen(toParse))
     {
         if(toParse[i] == ' ')
@@ -39,17 +44,19 @@ Command* parseArgs(const char* toParse, size_t* parsedArgs)
         }
     }
 
+    count = count - 1;
+
     Command* ret = new_command(count);
 
 
     size_t start = 0;
     size_t end;
-    size_t currentArg = 0;
+    int currentArg = -1;
     i = 0;
 
     size_t iterCount = strlen(toParse) + 1;
 
-    while(iterCount > 1 && i < iterCount)
+    while(iterCount > 1 && i < iterCount && currentArg < count)
     {
         if(toParse[i] == ' ' || toParse[i] == '\0')
         {
@@ -57,7 +64,16 @@ Command* parseArgs(const char* toParse, size_t* parsedArgs)
             char* sub = malloc(sizeof(char) * (end - start + 2));
             strncpy(sub, toParse + start, end + start + 1);
             sub[end - start + 1] = '\0';
-            ret[currentArg++] = sub;
+
+            if(currentArg == -1)
+            {
+                ret->command = sub;
+                currentArg++;
+            }
+            else
+            {
+                ret->arguments[currentArg++] = sub;
+            }
             i++;
 
             //TODO: Iterate until find new start
@@ -76,10 +92,64 @@ Command* parseArgs(const char* toParse, size_t* parsedArgs)
         }
     }
 
-    if(parsedArgs != NULL)
+    while(strlen(toParse) > i)
     {
-        *parsedArgs = count;
+        if(toParse[i] == '>')
+        {
+            ret->redirectStdOut = true;
+            i++;
+            while(toParse[i] == ' ')
+                i++;
+            size_t localStart = i;
+            size_t localEnd = 0;
+
+            while(toParse[i] != ' ' || toParse[i] == '\0')
+            {
+                i++;
+            }
+
+            localEnd = i;
+            char* sub = malloc(sizeof(char) * (localEnd - localStart + 2));
+            strncpy(sub, toParse + localStart, localEnd - localStart);
+            sub[localEnd - localStart + 1] = '\0';
+
+            ret->stdOutFile = sub;
+        }
+        else if(toParse[i] == '<')
+        {
+            ret->redirectStdIn = true;
+            i++;
+            while(toParse[i] == ' ')
+                i++;
+            size_t localStart = i;
+            size_t localEnd = 0;
+
+            while(toParse[i] != ' ' || toParse[i] == '\0')
+            {
+                i++;
+            }
+
+            localEnd = i;
+            char* sub = malloc(sizeof(char) * (localEnd - localStart + 2));
+            strncpy(sub, toParse + localStart, localEnd - localStart);
+            sub[localEnd - localStart + 1] = '\0';
+
+            ret->stdInFile = sub;
+        }
+        else if(toParse[i] == '&')
+        {
+            if(toParse[i + 1] == ' ' || toParse[i + 1] == '\0')
+            {
+                ret->background = true;
+                break;
+            }
+        }
+        else
+        {
+            i++;
+        }
     }
+
     return ret;
 }
 
@@ -113,30 +183,98 @@ void do_status()
     fflush(stdout);
 }
 
+int exec_command(Command* command)
+{
+    int fin;
+    int fout;
+
+    if(command->redirectStdIn)
+    {
+        struct stat statbuffer;
+        if(stat(command->stdInFile, &statbuffer) == -1)
+        {
+            printf("cannot open %s for input\n", command->stdInFile);
+            fflush(stdout);
+            CURRENT_RETURN = 1;
+            return CURRENT_RETURN;
+        }
+    }
+
+    char* argv[command->numArgs + 2];
+
+    argv[0] = command->command;
+    for(int i = 1; i < command->numArgs + 1; i++)
+    {
+        argv[i] = command->arguments[i - 1];
+    }
+
+    argv[command->numArgs + 1] = NULL;
+
+    pid_t parent = getpid();
+    pid_t pid = fork();
+
+    if(pid == 0)
+    {
+        if(command->redirectStdIn)
+        {
+            fin = open(command->stdInFile, O_RDONLY);
+            dup2(fin, STDIN_FILENO);
+        }
+        if(command->redirectStdOut)
+        {
+            fout = open(command->stdOutFile, O_WRONLY | O_CREAT | O_TRUNC, 0755);
+            dup2(fout, STDOUT_FILENO);
+        }
+
+        int status = execvp(argv[0], argv);
+        if(status == -1)
+        {
+            printf("%s: No such file or directory\n", argv[0]);
+            fflush(stdout);
+            exit(EXIT_FAILURE);
+        }
+    }
+    else
+    {
+        int waitStatus;
+        waitpid(pid, &waitStatus, 0);
+        fflush(stdout);
+    }
+
+    return 0;
+}
+
 int process(const char* buffer)
 {
-    size_t numArgs = 0;
-    char** args = parseArgs(buffer, &numArgs);
+    Command* command = parseArgs(buffer);
 
-    if(strcmp(args[0], "exit") == 0)
+    if(strcmp(command->command, "exit") == 0)
     {
         do_exit();
     }
-    else if (strcmp(args[0], "cd") == 0)
+    else if (strcmp(command->command, "cd") == 0)
     {
-        if(numArgs == 1)
+        if(command->numArgs == 0)
         {
             CURRENT_RETURN = do_cd(NULL);
         }
         else
         {
-            CURRENT_RETURN = do_cd(args[1]);
+            CURRENT_RETURN = do_cd(command->arguments[0]);
         }
     }
-    else if (strcmp(args[0], "status") == 0)
+    else if (strcmp(command->command, "status") == 0)
     {
         do_status();
     }
+    else
+    {
+        CURRENT_RETURN = exec_command(command);
+    }
+
+    delete_command(command);
+
+    return CURRENT_RETURN;
 }
 
 int shell_loop()
