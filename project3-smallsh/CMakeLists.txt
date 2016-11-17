@@ -3,5 +3,5 @@ project(smallsh)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
 
-set(SOURCE_FILES main.c)
+set(SOURCE_FILES main.c command.c)
 add_executable(smallsh ${SOURCE_FILES})

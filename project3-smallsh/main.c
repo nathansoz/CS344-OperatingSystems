@@ -4,12 +4,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "command.h"
 
 const char* PROMPT = ": ";
 const int PROMPT_BUFFER = 4096;
 
-char** parseArgs(const char* toParse, size_t* parsedArgs)
+int CURRENT_RETURN = 0;
+
+Command* parseArgs(const char* toParse, size_t* parsedArgs)
 {
+
     size_t i = 0;
     size_t count = 1;
     while(i < strlen(toParse))
@@ -20,7 +24,7 @@ char** parseArgs(const char* toParse, size_t* parsedArgs)
             {
                 i++;
             }
-            if(toParse[i] == '\0')
+            if(toParse[i] == '\0' || toParse[i] == '>' || toParse[i] == '<' || toParse[i] == '&')
             {
                 break;
             }
@@ -35,25 +39,36 @@ char** parseArgs(const char* toParse, size_t* parsedArgs)
         }
     }
 
-    char** ret = malloc(sizeof(char*) * count);
+    Command* ret = new_command(count);
+
 
     size_t start = 0;
     size_t end;
     size_t currentArg = 0;
     i = 0;
 
-    while(i < strlen(toParse))
+    size_t iterCount = strlen(toParse) + 1;
+
+    while(iterCount > 1 && i < iterCount)
     {
-        if(toParse[i] == ' ')
+        if(toParse[i] == ' ' || toParse[i] == '\0')
         {
             end = i - 1;
-            char* sub = malloc(sizeof(char) * (end - start + 1));
+            char* sub = malloc(sizeof(char) * (end - start + 2));
             strncpy(sub, toParse + start, end + start + 1);
+            sub[end - start + 1] = '\0';
             ret[currentArg++] = sub;
+            i++;
 
             //TODO: Iterate until find new start
             //TODO: Write an arg dealloc function
             //TODO: This function probably has to return the number of args parsed
+            while(toParse[i] == ' ')
+            {
+                i++;
+            }
+
+            start = i;
         }
         else
         {
@@ -92,31 +107,46 @@ int do_cd(const char* directory)
     return chdir(directory);
 }
 
+void do_status()
+{
+    printf("status code %i\n", CURRENT_RETURN);
+    fflush(stdout);
+}
+
 int process(const char* buffer)
 {
-    if(strcmp(buffer, "exit") == 0)
+    size_t numArgs = 0;
+    char** args = parseArgs(buffer, &numArgs);
+
+    if(strcmp(args[0], "exit") == 0)
     {
         do_exit();
     }
-    else if ((strlen(buffer) == 2 && strcmp(buffer, "cd") == 0) || strstr(buffer, "cd ") == buffer)
+    else if (strcmp(args[0], "cd") == 0)
     {
-        if(strlen(buffer) == 2)
+        if(numArgs == 1)
         {
-            return do_cd(NULL);
+            CURRENT_RETURN = do_cd(NULL);
         }
-
-        char** args = parseArgs(buffer);
-
-        return do_cd("blah");
+        else
+        {
+            CURRENT_RETURN = do_cd(args[1]);
+        }
+    }
+    else if (strcmp(args[0], "status") == 0)
+    {
+        do_status();
     }
 }
 
 int shell_loop()
 {
+
     while(true)
     {
         char input[PROMPT_BUFFER];
         printf("%s", PROMPT);
+        fflush(stdout);
 
         if(fgets(input, PROMPT_BUFFER, stdin) != 0)
         {
@@ -125,7 +155,11 @@ int shell_loop()
             {
                 *pos = '\0';
             }
-            process(input);
+
+            if(strlen(input) > 0)
+            {
+                process(input);
+            }
         }
     }
 }
