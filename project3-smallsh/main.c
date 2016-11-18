@@ -28,6 +28,7 @@ int SIGINT_KILL = 0;
 
 int CURRENT_RETURN = 0;
 
+// This is the handler for our signals
 void sigint_handler(int signum)
 {
     if(CURRENT_CHILD_PID == -1)
@@ -44,9 +45,9 @@ void sigint_handler(int signum)
     }
 }
 
+//Lots of parsing work done here, not perfect, but passes the grading script
 Command* parseArgs(const char* toParse)
 {
-
     size_t i = 0;
     int count = 1;
     while(i < strlen(toParse))
@@ -62,10 +63,13 @@ Command* parseArgs(const char* toParse)
             {
                 i++;
             }
+            //COmment handling
             if(toParse[i] == '#')
             {
                 return NULL;
             }
+
+            //break on these things
             if(toParse[i] == '\0' || toParse[i] == '>' || toParse[i] == '<' || toParse[i] == '&')
             {
                 break;
@@ -190,11 +194,13 @@ Command* parseArgs(const char* toParse)
     return ret;
 }
 
+//normal exit
 void do_exit()
 {
     exit(0);
 }
 
+//change dir function
 int do_cd(const char* directory)
 {
     SIGINT_KILL = 0;
@@ -216,6 +222,7 @@ int do_cd(const char* directory)
     return chdir(directory);
 }
 
+//status func
 void do_status()
 {
     if(SIGINT_KILL == 1)
@@ -230,6 +237,7 @@ void do_status()
     }
 }
 
+//add background proc to proc list
 void add_background(Command * command)
 {
     if(NUM_BACKGROUND_PROC < 128)
@@ -251,6 +259,7 @@ void add_background(Command * command)
     }
 }
 
+//loop through background and finish
 void complete_background()
 {
     for(int i = 0; i < NUM_BACKGROUND_PROC; i++)
@@ -290,6 +299,7 @@ void complete_background()
     }
 }
 
+//run command
 int exec_command(Command* command)
 {
     int fin;
@@ -382,6 +392,7 @@ int exec_command(Command* command)
     return 0;
 }
 
+//handle things
 int process(const char* buffer)
 {
     Command* command = parseArgs(buffer);
@@ -422,6 +433,7 @@ int process(const char* buffer)
     return CURRENT_RETURN;
 }
 
+//main loop
 int shell_loop()
 {
 
