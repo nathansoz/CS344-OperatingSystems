@@ -12,6 +12,7 @@ Command* new_command(size_t argCount)
     ret->redirectStdIn = false;
     ret->redirectStdOut = false;
     ret->background = false;
+    ret->complete = false;
 
     if(argCount > 0)
     {

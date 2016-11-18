@@ -6,6 +6,8 @@
 #define SMALLSH_COMMAND_H
 
 #include <stdbool.h>
+#include <sys/types.h>
+
 
 typedef struct
 {
@@ -18,6 +20,8 @@ typedef struct
     bool redirectStdOut;
     char* stdOutFile;
     bool background;
+    pid_t procPid;
+    bool complete;
 } Command;
 
 Command* new_command(size_t argCount);
